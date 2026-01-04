@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.0](https://github.com/n-e-l/music-management/releases/tag/v0.0.0) - 2026-01-04
+
+### Other
+
+- Initial commit
+
 <<<<<<< Updated upstream
 ## [0.0.7](https://github.com/n-e-l/kiyo/compare/v0.0.6...v0.0.7) - 2025-10-04
 
