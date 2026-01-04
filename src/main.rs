@@ -1,8 +1,19 @@
+mod discord;
+
+use poise::serenity_prelude::GatewayIntents;
+use poise::serenity_prelude;
+use std::collections::HashMap;
+use std::sync::Mutex;
+use poise::samples::on_error;
 use std::env::var;
 use std::error::Error;
+use std::sync::Arc;
+use std::time::Duration;
 use reqwest::header::AUTHORIZATION;
 use serde_json::{to_string_pretty, Value};
 use dotenv::dotenv;
+use poise::FrameworkError;
+use poise::serenity_prelude as serenity;
 
 async fn fetch_recommendations() -> Result<Value, Box<dyn Error>> {
     let client = reqwest::Client::new();
@@ -83,9 +94,36 @@ struct Album
     album_mbid: String
 }
 
+async fn run_poise() {
+    let token = std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
+    let intents = serenity::GatewayIntents::non_privileged();
+
+    let framework = poise::Framework::builder()
+        .options(poise::FrameworkOptions {
+            commands: vec![discord::age()],
+            ..Default::default()
+        })
+        .setup(|ctx, _ready, framework| {
+            Box::pin(async move {
+                poise::builtins::register_globally(ctx, &framework.options().commands).await?;
+                Ok(discord::Data {})
+            })
+        })
+        .build();
+
+    let client = serenity::ClientBuilder::new(token, intents)
+        .framework(framework)
+        .await;
+    client.unwrap().start().await.unwrap();
+}
+
 #[tokio::main]
 async fn main() {
     dotenv().ok();
+
+    run_poise().await;
+
+    return;
 
     let recommendations = fetch_recommendations().await.expect("Failed to query listenbrainz again");
     if let Some(playlist) = get_weekly_exploration(recommendations.clone()) {
