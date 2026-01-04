@@ -1,0 +1,16 @@
+[package]
+name = "listenbrainz-headphones"
+version = "0.0.0"
+edition = "2021"
+authors = ["Lauda Carly <lauda@nel.re"]
+description = "Listenbrainz interface for headphones"
+readme = "README.md"
+repository = "https://github.com/n-e-l/listenbrainz-headphones"
+license = "GPL-3.0-only"
+
+[dependencies]
+dotenv = "0.15.0"
+reqwest = "0.12.24"
+tokio = { version = "1.48.0", features = ["rt", "rt-multi-thread", "macros"] }
+serde_json = "1.0.145"
+
