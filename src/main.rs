@@ -19,7 +19,7 @@ async fn fetch_recommendations() -> Result<Value, Box<dyn Error>> {
     let client = reqwest::Client::new();
     let content = client
         .get("https://api.listenbrainz.org/1/user/magnias/playlists/createdfor")
-        .header(AUTHORIZATION, format!("\"Authorization\": \"Token {}\"", var("TOKEN").expect("TOKEN should be set")))
+        .header(AUTHORIZATION, format!("\"Authorization\": \"Token {}\"", var("LISTENBRAINZ_TOKEN").expect("LISTENBRAINZ_TOKEN should be set")))
         .send()
         .await?
         .text()
