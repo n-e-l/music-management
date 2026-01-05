@@ -1,3 +1,4 @@
+use std::cmp::PartialEq;
 use std::fmt::format;
 use std::ops::{AddAssign};
 use std::panic::resume_unwind;
@@ -6,7 +7,7 @@ use poise::serenity_prelude::{CreateActionRow, CreateButton};
 use poise::serenity_prelude::json::to_string_pretty;
 use crate::error::Error;
 use crate::music;
-use crate::music::add_album;
+use crate::music::{add_album, album_info, AlbumStatus};
 
 pub struct Data {} // User data, which is stored and accessible in all command invocations
 type Context<'a> = poise::Context<'a, Data, Error>;
@@ -70,7 +71,20 @@ pub async fn lb_import(
     for a in &albums {
         add_album(a).await?;
 
-        let extra = format!("- {}\n", a.album);
+        let info = album_info(a).await?;
+        let checkmark = match info {
+            AlbumStatus::Nothing => {
+                ":x:"
+            }
+            AlbumStatus::Wanted => {
+                ":arrows_counterclockwise:"
+            }
+            AlbumStatus::Downloaded => {
+                ":white_check_mark:"
+            }
+        };
+
+        let extra = format!("- {} {}\n", checkmark, a.album);
         response.add_assign(&extra);
 
         reply.edit(

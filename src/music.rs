@@ -5,6 +5,7 @@ use poise::serenity_prelude::json::to_string_pretty;
 use reqwest::header::{AUTHORIZATION, USER_AGENT};
 use serde_json::{json, Value};
 use crate::error::Error;
+use crate::music::AlbumStatus::{Downloaded, Nothing, Wanted};
 
 #[derive(Debug)]
 pub struct Album
@@ -106,7 +107,7 @@ pub async fn headphones_status() -> Result<Vec<AlbumState>, Error> {
 pub async fn add_album(album: &Album) -> Result<String, Error> {
     let client = reqwest::Client::new();
     let result = client
-        .get(format!("{}/api?apikey={}&cmd=addAlbum&id={}",
+        .get(format!("{}/api?apikey={}&cmd=queueAlbum&id={}",
                      var("HEADPHONES_URI").expect("HEADPHONES_URI should be set"),
                      var("HEADPHONES_API_KEY").expect("HEADPHONES_API_KEY should be set"),
                      album.album_mbid)
@@ -116,6 +117,42 @@ pub async fn add_album(album: &Album) -> Result<String, Error> {
         .text()
         .await?;
     Ok(result)
+}
+
+pub enum AlbumStatus {
+    Nothing,
+    Wanted,
+    Downloaded
+}
+
+pub async fn album_info(album: &Album) -> Result<AlbumStatus, Error> {
+    let client = reqwest::Client::new();
+    let result = client
+        .get(format!("{}/api?apikey={}&cmd=getAlbum&id={}",
+                     var("HEADPHONES_URI").expect("HEADPHONES_URI should be set"),
+                     var("HEADPHONES_API_KEY").expect("HEADPHONES_API_KEY should be set"),
+                     album.album_mbid)
+        )
+        .send()
+        .await?
+        .text()
+        .await?;
+
+    println!("{}", album.album_mbid);
+    let value: Value = serde_json::from_str(result.as_str())?;
+    println!("{}", result);
+    let status = value.get("album").unwrap()
+        .get("Status").unwrap_or(&Value::Null)
+        .to_string();
+
+    if status == "Downloaded" {
+        return Ok(Downloaded);
+    }
+    if status == "Wanted" {
+        return Ok(Wanted);
+    }
+
+    Ok(Nothing)
 }
 
 pub async fn lb_search_album(
