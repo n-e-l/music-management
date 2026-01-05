@@ -1,5 +1,7 @@
 use std::env::var;
-use reqwest::header::AUTHORIZATION;
+use std::fmt::format;
+use poise::serenity_prelude::json::to_string_pretty;
+use reqwest::header::{AUTHORIZATION, USER_AGENT};
 use serde_json::{Value};
 use crate::error::Error;
 
@@ -7,6 +9,7 @@ use crate::error::Error;
 pub struct Album
 {
     pub album: String,
+    pub artist: String,
     pub album_mbid: String
 }
 
@@ -28,6 +31,7 @@ pub async fn fetch_recommendations() -> Result<Value, Error> {
     let content = client
         .get("https://api.listenbrainz.org/1/user/magnias/playlists/createdfor")
         .header(AUTHORIZATION, format!("\"Authorization\": \"Token {}\"", var("LISTENBRAINZ_TOKEN").expect("LISTENBRAINZ_TOKEN should be set")))
+        .header(USER_AGENT, format!("{}", "https://github.com/n-e-l/music-management (lauda@nel.re)"))
         .send()
         .await?
         .text()
@@ -76,6 +80,86 @@ pub async fn add_album(album: &Album) -> Result<String, Error> {
     Ok(result)
 }
 
+pub async fn lb_search_album(
+    album_title: Option<String>,
+    artist_name: Option<String>
+) -> Result<Vec<Album>, Error> {
+
+    let query = if album_title.is_some() && artist_name.is_some() {
+        format!(
+            "release:{} AND artist:{}",
+            album_title.as_ref().unwrap(),
+            artist_name.as_ref().unwrap()
+        )
+    } else if album_title.is_some() {
+        format!(
+            "release:{}",
+            album_title.as_ref().unwrap()
+        )
+    } else if artist_name.is_some() {
+        format!(
+            "artist:{}",
+            artist_name.as_ref().unwrap()
+        )
+    } else {
+        return Err("Didn't provide any search parameters".into());
+    };
+    println!("{}", query);
+
+    let url = format!(
+        "https://musicbrainz.org/ws/2/release/?query={}&fmt=json",
+        urlencoding::encode(&query)
+    );
+
+    let client = reqwest::Client::new();
+    let content = client
+        .get(url)
+        .header(AUTHORIZATION, format!("\"Authorization\": \"Token {}\"", var("LISTENBRAINZ_TOKEN").expect("LISTENBRAINZ_TOKEN should be set")))
+        .header(USER_AGENT, format!("{}", "https://github.com/n-e-l/music-management (lauda@nel.re)"))
+        .send()
+        .await?
+        .text()
+        .await?;
+
+    let mut albums = vec![];
+
+    let value: Value = serde_json::from_str(content.as_str())?;
+    match value.get("releases").unwrap() {
+        Value::Array(list) => {
+            for p in list {
+                let pretty = to_string_pretty(&p).unwrap();
+                println!("{}", pretty);
+
+                let artist = p.get("artist-credit")
+                    // TODO: Get all artists
+                    .and_then(|u| u.as_array().unwrap().first())
+                    .and_then(|u| u.get("artist"))
+                    .and_then(|u| u.get("name"))
+                    .unwrap()
+                    .to_string();
+
+                let title = p.get("title")
+                    .unwrap()
+                    .to_string();
+
+                let album_mbid = p.get("id")
+                    .unwrap()
+                    .to_string();
+
+                let album = Album {
+                    album: title,
+                    album_mbid,
+                    artist
+                };
+                albums.push(album);
+            }
+        },
+        _ => {}
+    }
+
+    Ok(albums)
+}
+
 pub async fn request_lb_recommended() -> Result<Vec<Album>, Error> {
     let recommendations = fetch_recommendations().await?;
     if let Some(playlist) = get_weekly_exploration(recommendations.clone()) {
@@ -99,9 +183,12 @@ pub async fn request_lb_recommended() -> Result<Vec<Album>, Error> {
                             .trim_matches('"')
                             .to_string();
 
+                        let artist = "".to_string();
+
                         return Some(Album {
                             album,
                             album_mbid: album_mbid_string,
+                            artist
                         })
                     } else {
                         println!("The listenbrainz metadata didn't contain an album id, skipping");
