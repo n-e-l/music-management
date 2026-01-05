@@ -5,14 +5,15 @@ use poise::serenity_prelude::json::to_string_pretty;
 use reqwest::header::{AUTHORIZATION, USER_AGENT};
 use serde_json::{json, Value};
 use crate::error::Error;
-use crate::music::AlbumStatus::{Downloaded, Nothing, Wanted};
+use crate::music::AlbumStatus::{Downloaded, Nothing, Snatched, Wanted};
 
 #[derive(Debug)]
 pub struct Album
 {
     pub album: String,
     pub artist: String,
-    pub album_mbid: String
+    pub album_mbid: String,
+    pub release_group: String,
 }
 
 async fn fetch_playlist(mbid: &str) -> Result<Value, Error> {
@@ -89,7 +90,6 @@ pub async fn headphones_status() -> Result<Vec<AlbumState>, Error> {
         .text()
         .await?;
 
-    println!("{}", result);
     let json = Value::from_str(&result)?;
     let album_states = json.as_array().unwrap().iter().map(|entry| {
         let title = entry.get("Title").unwrap().clone().to_string();
@@ -106,11 +106,22 @@ pub async fn headphones_status() -> Result<Vec<AlbumState>, Error> {
 
 pub async fn add_album(album: &Album) -> Result<String, Error> {
     let client = reqwest::Client::new();
+    client
+        .get(format!("{}/api?apikey={}&cmd=addAlbum&id={}",
+                     var("HEADPHONES_URI").expect("HEADPHONES_URI should be set"),
+                     var("HEADPHONES_API_KEY").expect("HEADPHONES_API_KEY should be set"),
+                     album.release_group)
+        )
+        .send()
+        .await?
+        .text()
+        .await?;
+
     let result = client
         .get(format!("{}/api?apikey={}&cmd=queueAlbum&id={}",
                      var("HEADPHONES_URI").expect("HEADPHONES_URI should be set"),
                      var("HEADPHONES_API_KEY").expect("HEADPHONES_API_KEY should be set"),
-                     album.album_mbid)
+                     album.release_group)
         )
         .send()
         .await?
@@ -119,9 +130,11 @@ pub async fn add_album(album: &Album) -> Result<String, Error> {
     Ok(result)
 }
 
+#[derive(Debug)]
 pub enum AlbumStatus {
     Nothing,
     Wanted,
+    Snatched,
     Downloaded
 }
 
@@ -131,18 +144,22 @@ pub async fn album_info(album: &Album) -> Result<AlbumStatus, Error> {
         .get(format!("{}/api?apikey={}&cmd=getAlbum&id={}",
                      var("HEADPHONES_URI").expect("HEADPHONES_URI should be set"),
                      var("HEADPHONES_API_KEY").expect("HEADPHONES_API_KEY should be set"),
-                     album.album_mbid)
+                     album.release_group)
         )
         .send()
         .await?
         .text()
         .await?;
 
-    println!("{}", album.album_mbid);
     let value: Value = serde_json::from_str(result.as_str())?;
-    println!("{}", result);
-    let status = value.get("album").unwrap()
+
+    let album_json = value.get("album").unwrap();
+    let status = album_json
+        .as_array().unwrap()
+        .get(0).unwrap()
         .get("Status").unwrap_or(&Value::Null)
+        .to_string()
+        .trim_matches('"')
         .to_string();
 
     if status == "Downloaded" {
@@ -150,6 +167,9 @@ pub async fn album_info(album: &Album) -> Result<AlbumStatus, Error> {
     }
     if status == "Wanted" {
         return Ok(Wanted);
+    }
+    if status == "Snatched" {
+        return Ok(Snatched);
     }
 
     Ok(Nothing)
@@ -221,18 +241,47 @@ pub async fn lb_search_album(
                     .unwrap()
                     .to_string();
 
-                let album = Album {
-                    album: title,
-                    album_mbid,
-                    artist
-                };
-                albums.push(album);
+                if let Some(release_group) = get_release_group(album_mbid.clone()).await? {
+                    let album = Album {
+                        album: title,
+                        album_mbid,
+                        release_group,
+                        artist
+                    };
+                    albums.push(album);
+                }
             }
         },
         _ => {}
     }
 
     Ok(albums)
+}
+
+async fn get_release_group(mbid: String) -> Result<Option<String>, Error> {
+    let client = reqwest::Client::new();
+    let content = client
+        .get(format!("https://musicbrainz.org/ws/2/release/{}?inc=release-groups&fmt=json", mbid))
+        .header(USER_AGENT, format!("{}", "https://github.com/n-e-l/music-management (lauda@nel.re)"))
+        .send()
+        .await?
+        .text()
+        .await?;
+
+    let parsed: Value = serde_json::from_str(content.as_str())?;
+
+    if parsed.get("release-group").is_none() {
+        return Ok(None);
+    }
+
+    let release_group = parsed
+        .get("release-group").unwrap()
+        .get("id").unwrap()
+        .to_string()
+        .trim_matches('"')
+        .to_string();
+
+    Ok(Some(release_group))
 }
 
 pub async fn request_lb_recommended() -> Result<Vec<Album>, Error> {
@@ -243,7 +292,10 @@ pub async fn request_lb_recommended() -> Result<Vec<Album>, Error> {
 
         match content.get("playlist").and_then(|u| u.get("track")).unwrap() {
             Value::Array(list) => {
-                let albums = list.iter().filter_map(|entry| {
+
+                let mut albums = Vec::new();
+                for entry in list {
+
                     if let Some(album_mbid) = entry.get("extension")
                         .and_then(|u| u.get("https://musicbrainz.org/doc/jspf#track"))
                         .and_then(|u| u.get("additional_metadata"))
@@ -253,6 +305,7 @@ pub async fn request_lb_recommended() -> Result<Vec<Album>, Error> {
                             .trim_matches('"')
                             .to_string();
 
+
                         let album = entry.get("album").unwrap()
                             .to_string()
                             .trim_matches('"')
@@ -260,16 +313,18 @@ pub async fn request_lb_recommended() -> Result<Vec<Album>, Error> {
 
                         let artist = "".to_string();
 
-                        return Some(Album {
-                            album,
-                            album_mbid: album_mbid_string,
-                            artist
-                        })
+                        if let Some(release_group) = get_release_group(album_mbid_string.clone()).await? {
+                            albums.push(Album {
+                                album,
+                                album_mbid: album_mbid_string,
+                                release_group,
+                                artist
+                            });
+                        }
                     } else {
                         println!("The listenbrainz metadata didn't contain an album id, skipping");
-                        return None
                     }
-                }).collect::<Vec<Album>>();
+                }
 
                 return Ok(albums);
             },

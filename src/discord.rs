@@ -63,10 +63,10 @@ pub async fn status(
 pub async fn lb_import(
     ctx: Context<'_>,
 ) -> Result<(), Error> {
-    let albums = music::request_lb_recommended().await?;
-
     let mut response = "Adding albums\n".to_string();
     let reply = ctx.say(response.clone()).await?;
+
+    let albums = music::request_lb_recommended().await?;
 
     for a in &albums {
         add_album(a).await?;
@@ -74,17 +74,21 @@ pub async fn lb_import(
         let info = album_info(a).await?;
         let checkmark = match info {
             AlbumStatus::Nothing => {
-                ":x:"
+                ":red_circle:"
             }
             AlbumStatus::Wanted => {
-                ":arrows_counterclockwise:"
+                ":yellow_circle:"
+            }
+            AlbumStatus::Snatched => {
+                ":green_circle:"
             }
             AlbumStatus::Downloaded => {
-                ":white_check_mark:"
+                ":green_circle:"
             }
         };
 
-        let extra = format!("- {} {}\n", checkmark, a.album);
+        let url = format!("http://music.nel.re:8181/albumPage?AlbumID={}", a.release_group);
+        let extra = format!("- {} {} - [{}]({})\n", checkmark, a.artist, a.album, url);
         response.add_assign(&extra);
 
         reply.edit(
