@@ -55,7 +55,7 @@ fn get_weekly_exploration(recommendations: Value) -> Option<String> {
                         .and_then(|u| u.get("identifier"))
                         .unwrap()
                         .to_string();
-                    let mut mbid = url.trim_matches('"').split('/').last().unwrap();
+                    let mbid = url.trim_matches('"').split('/').last().unwrap();
                     return Some(mbid.to_string());
                 }
             }
@@ -65,7 +65,7 @@ fn get_weekly_exploration(recommendations: Value) -> Option<String> {
     None
 }
 
-pub async fn add_album(album: &Album) -> Result<(), Error> {
+pub async fn add_album(album: &Album) -> Result<String, Error> {
     let client = reqwest::Client::new();
     let result = client
         .get(format!("http://music.nel.re:8181/api?apikey={}&cmd=addAlbum&id={}", var("HEADPHONES_API_KEY").expect("HEADPHONES_API_KEY should be set"), album.album_mbid))
@@ -73,7 +73,7 @@ pub async fn add_album(album: &Album) -> Result<(), Error> {
         .await?
         .text()
         .await?;
-    Ok(())
+    Ok(result)
 }
 
 pub async fn request_lb_recommended() -> Result<Vec<Album>, Error> {
