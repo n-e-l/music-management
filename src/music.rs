@@ -1,8 +1,9 @@
 use std::env::var;
 use std::fmt::format;
+use std::str::FromStr;
 use poise::serenity_prelude::json::to_string_pretty;
 use reqwest::header::{AUTHORIZATION, USER_AGENT};
-use serde_json::{Value};
+use serde_json::{json, Value};
 use crate::error::Error;
 
 #[derive(Debug)]
@@ -67,6 +68,39 @@ fn get_weekly_exploration(recommendations: Value) -> Option<String> {
         _ => return None
     }
     None
+}
+
+pub struct AlbumState {
+    pub status: String,
+    pub title: String
+}
+
+pub async fn headphones_status() -> Result<Vec<AlbumState>, Error> {
+    let client = reqwest::Client::new();
+    let result = client
+        .get(format!("{}/api?apikey={}&cmd=getHistory",
+                     var("HEADPHONES_URI").expect("HEADPHONES_URI should be set"),
+                     var("HEADPHONES_API_KEY").expect("HEADPHONES_API_KEY should be set")
+        )
+        )
+        .send()
+        .await?
+        .text()
+        .await?;
+
+    println!("{}", result);
+    let json = Value::from_str(&result)?;
+    let album_states = json.as_array().unwrap().iter().map(|entry| {
+        let title = entry.get("Title").unwrap().clone().to_string();
+        let status = entry.get("Status").unwrap().clone().to_string();
+
+        AlbumState {
+            title,
+            status
+        }
+    }).collect();
+
+    Ok(album_states)
 }
 
 pub async fn add_album(album: &Album) -> Result<String, Error> {

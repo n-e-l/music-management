@@ -44,6 +44,21 @@ pub async fn lb_recommends(
 }
 
 #[poise::command(slash_command, prefix_command)]
+pub async fn status(
+    ctx: Context<'_>,
+) -> Result<(), Error> {
+    let albums = music::headphones_status().await?;
+
+    let response = albums.iter().map(|a| {
+        a.title.clone() + " " + &a.status
+    }).collect::<Vec<String>>().join("\n");
+
+    ctx.say(response).await?;
+
+    Ok(())
+}
+
+#[poise::command(slash_command, prefix_command)]
 pub async fn lb_import(
     ctx: Context<'_>,
 ) -> Result<(), Error> {

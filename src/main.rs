@@ -18,6 +18,7 @@ async fn main() {
                 discord::lb_recommends(),
                 discord::lb_import(),
                 discord::search(),
+                discord::status(),
                 discord::help()
             ],
             ..Default::default()
