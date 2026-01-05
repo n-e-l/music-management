@@ -72,7 +72,11 @@ fn get_weekly_exploration(recommendations: Value) -> Option<String> {
 pub async fn add_album(album: &Album) -> Result<String, Error> {
     let client = reqwest::Client::new();
     let result = client
-        .get(format!("http://music.nel.re:8181/api?apikey={}&cmd=addAlbum&id={}", var("HEADPHONES_API_KEY").expect("HEADPHONES_API_KEY should be set"), album.album_mbid))
+        .get(format!("{}/api?apikey={}&cmd=addAlbum&id={}",
+                     var("HEADPHONES_URI").expect("HEADPHONES_URI should be set"),
+                     var("HEADPHONES_API_KEY").expect("HEADPHONES_API_KEY should be set"),
+                     album.album_mbid)
+        )
         .send()
         .await?
         .text()
