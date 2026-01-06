@@ -281,6 +281,8 @@ async fn get_release_group(mbid: String) -> Result<Option<String>, Error> {
         .trim_matches('"')
         .to_string();
 
+    println!("Fetched release group info: {}", release_group);
+
     Ok(Some(release_group))
 }
 
