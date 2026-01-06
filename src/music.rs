@@ -311,7 +311,16 @@ pub async fn request_lb_recommended() -> Result<Vec<Album>, Error> {
                             .trim_matches('"')
                             .to_string();
 
-                        let artist = "".to_string();
+                        let artist = entry.get("extension")
+                            .and_then(|u| u.get("https://musicbrainz.org/doc/jspf#track"))
+                            .and_then(|u| u.get("additional_metadata"))
+                            .and_then(|u| u.get("artists"))
+                            .unwrap()
+                            .as_array().unwrap().first().unwrap()
+                            .get("artist_credit_name").unwrap()
+                            .to_string()
+                            .trim_matches('"')
+                            .to_string();
 
                         if let Some(release_group) = get_release_group(album_mbid_string.clone()).await? {
                             albums.push(Album {
