@@ -11,6 +11,7 @@ pub struct Album
     pub album: String,
     pub artist: String,
     pub release_group: String,
+    pub mbid: String,
 }
 
 async fn fetch_playlist(mbid: &str) -> Result<Value, Error> {
@@ -239,6 +240,7 @@ pub async fn lb_search_album(
                     let album = Album {
                         album: title,
                         release_group,
+                        mbid: album_mbid,
                         artist
                     };
                     albums.push(album);
@@ -276,6 +278,7 @@ async fn get_albums(album_mbids: Vec<String>) -> Result<Vec<Album>, Error> {
 
             let rg = release.get("release-group").and_then(|u| u.get("id")).and_then(|u| u.as_str());
             let title = release.get("release-group").and_then(|u| u.get("title")).and_then(|u| u.as_str());
+            let id = release.get("id").and_then(|u| u.as_str());
             let artist = release.get("artist-credit")
                 .and_then(|u| u.as_array().unwrap().first())
                 .and_then(|u| u.get("name")).and_then(|u| u.as_str());
@@ -283,10 +286,13 @@ async fn get_albums(album_mbids: Vec<String>) -> Result<Vec<Album>, Error> {
             results.push(Album {
                 album: title.unwrap().to_string(),
                 artist: artist.unwrap().to_string(),
+                mbid: id.unwrap().to_string(),
                 release_group: rg.unwrap().to_string()
             });
         }
     }
+
+    println!("{:?}", results);
 
     Ok(results)
 }
