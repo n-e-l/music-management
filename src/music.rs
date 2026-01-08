@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::env::var;
 use std::str::FromStr;
 use reqwest::header::{AUTHORIZATION, USER_AGENT};
@@ -124,7 +125,7 @@ pub async fn add_album(album: &Album) -> Result<String, Error> {
         .get(format!("{}/api?apikey={}&cmd=addAlbum&id={}",
                      var("HEADPHONES_URI").expect("HEADPHONES_URI should be set"),
                      var("HEADPHONES_API_KEY").expect("HEADPHONES_API_KEY should be set"),
-                     album.mbid)
+                     album.release_group)
         )
         .send()
         .await?
@@ -307,6 +308,22 @@ async fn get_albums(album_mbids: Vec<String>) -> Result<Vec<Album>, Error> {
             });
         }
     }
+
+    results.sort_by(|a, b|{
+        if a.artist < b.artist {
+            return Ordering::Less
+        } else if a.artist > b.artist {
+            return Ordering::Greater
+        }
+
+        if a.album < b.album {
+            return Ordering::Less
+        } else if a.album > b.album {
+            return Ordering::Greater
+        }
+
+        Ordering::Equal
+    });
 
     Ok(results)
 }
