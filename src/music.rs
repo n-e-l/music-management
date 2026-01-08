@@ -104,7 +104,7 @@ pub async fn headphones_status() -> Result<Vec<AlbumState>, Error> {
 
 pub async fn add_album(album: &Album) -> Result<String, Error> {
     let client = reqwest::Client::new();
-    client
+    let result = client
         .get(format!("{}/api?apikey={}&cmd=addAlbum&id={}",
                      var("HEADPHONES_URI").expect("HEADPHONES_URI should be set"),
                      var("HEADPHONES_API_KEY").expect("HEADPHONES_API_KEY should be set"),
@@ -115,16 +115,17 @@ pub async fn add_album(album: &Album) -> Result<String, Error> {
         .text()
         .await?;
 
-    let result = client
-        .get(format!("{}/api?apikey={}&cmd=queueAlbum&id={}",
-                     var("HEADPHONES_URI").expect("HEADPHONES_URI should be set"),
-                     var("HEADPHONES_API_KEY").expect("HEADPHONES_API_KEY should be set"),
-                     album.release_group)
-        )
-        .send()
-        .await?
-        .text()
-        .await?;
+    // Only do an add for now
+    // let result = client
+    //     .get(format!("{}/api?apikey={}&cmd=queueAlbum&id={}",
+    //                  var("HEADPHONES_URI").expect("HEADPHONES_URI should be set"),
+    //                  var("HEADPHONES_API_KEY").expect("HEADPHONES_API_KEY should be set"),
+    //                  album.release_group)
+    //     )
+    //     .send()
+    //     .await?
+    //     .text()
+    //     .await?;
     Ok(result)
 }
 
@@ -291,8 +292,6 @@ async fn get_albums(album_mbids: Vec<String>) -> Result<Vec<Album>, Error> {
             });
         }
     }
-
-    println!("{:?}", results);
 
     Ok(results)
 }
