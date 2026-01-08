@@ -1,9 +1,7 @@
 use std::env::var;
-use std::fmt::format;
 use std::str::FromStr;
-use poise::serenity_prelude::json::to_string_pretty;
 use reqwest::header::{AUTHORIZATION, USER_AGENT};
-use serde_json::{json, Value};
+use serde_json::{Value};
 use crate::error::Error;
 use crate::music::AlbumStatus::{Downloaded, Nothing, Snatched, Wanted};
 
@@ -12,7 +10,6 @@ pub struct Album
 {
     pub album: String,
     pub artist: String,
-    pub album_mbid: String,
     pub release_group: String,
 }
 
@@ -199,7 +196,6 @@ pub async fn lb_search_album(
     } else {
         return Err("Didn't provide any search parameters".into());
     };
-    println!("{}", query);
 
     let url = format!(
         "https://musicbrainz.org/ws/2/release/?query={}&fmt=json",
@@ -222,8 +218,6 @@ pub async fn lb_search_album(
     match value.get("releases").unwrap() {
         Value::Array(list) => {
             for p in list {
-                let pretty = to_string_pretty(&p).unwrap();
-                println!("{}", pretty);
 
                 let artist = p.get("artist-credit")
                     // TODO: Get all artists
@@ -244,7 +238,6 @@ pub async fn lb_search_album(
                 if let Some(release_group) = get_release_group(album_mbid.clone()).await? {
                     let album = Album {
                         album: title,
-                        album_mbid,
                         release_group,
                         artist
                     };
@@ -256,6 +249,46 @@ pub async fn lb_search_album(
     }
 
     Ok(albums)
+}
+
+async fn get_albums(album_mbids: Vec<String>) -> Result<Vec<Album>, Error> {
+    let client = reqwest::Client::new();
+    let mbids_param = album_mbids.join("+");
+
+    // Get the full album data with release groups
+    let response = client
+        .get(format!("https://musicbrainz.org/ws/2/release?query=mbid:({})&fmt=json", mbids_param))
+        .header(USER_AGENT, format!("{}", "https://github.com/n-e-l/music-management (lauda@nel.re)"))
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        eprintln!("HTTP Error {}", response.status());
+        return Err("Failed to fetch releases".into());
+    }
+
+    let content = response.text().await?;
+    let parsed: Value = serde_json::from_str(&content)?;
+
+    let mut results = Vec::new();
+    if let Some(releases) = parsed.get("releases").and_then(|u| u.as_array()) {
+        for release in releases {
+
+            let rg = release.get("release-group").and_then(|u| u.get("id")).and_then(|u| u.as_str());
+            let title = release.get("release-group").and_then(|u| u.get("title")).and_then(|u| u.as_str());
+            let artist = release.get("artist-credit")
+                .and_then(|u| u.as_array().unwrap().first())
+                .and_then(|u| u.get("name")).and_then(|u| u.as_str());
+
+            results.push(Album {
+                album: title.unwrap().to_string(),
+                artist: artist.unwrap().to_string(),
+                release_group: rg.unwrap().to_string()
+            });
+        }
+    }
+
+    Ok(results)
 }
 
 async fn get_release_group(mbid: String) -> Result<Option<String>, Error> {
@@ -292,13 +325,11 @@ pub async fn request_lb_recommended() -> Result<Vec<Album>, Error> {
 
         let content = fetch_playlist(&playlist).await?;
 
-        match content.get("playlist").and_then(|u| u.get("track")).unwrap() {
+        let album_mbids: Vec<String> = match content.get("playlist").and_then(|u| u.get("track")).unwrap() {
             Value::Array(list) => {
+                list.iter().filter_map(|e| {
 
-                let mut albums = Vec::new();
-                for entry in list {
-
-                    if let Some(album_mbid) = entry.get("extension")
+                    if let Some(album_mbid) = e.get("extension")
                         .and_then(|u| u.get("https://musicbrainz.org/doc/jspf#track"))
                         .and_then(|u| u.get("additional_metadata"))
                         .and_then(|u| u.get("caa_release_mbid")) {
@@ -307,40 +338,18 @@ pub async fn request_lb_recommended() -> Result<Vec<Album>, Error> {
                             .trim_matches('"')
                             .to_string();
 
-
-                        let album = entry.get("album").unwrap()
-                            .to_string()
-                            .trim_matches('"')
-                            .to_string();
-
-                        let artist = entry.get("extension")
-                            .and_then(|u| u.get("https://musicbrainz.org/doc/jspf#track"))
-                            .and_then(|u| u.get("additional_metadata"))
-                            .and_then(|u| u.get("artists"))
-                            .unwrap()
-                            .as_array().unwrap().first().unwrap()
-                            .get("artist_credit_name").unwrap()
-                            .to_string()
-                            .trim_matches('"')
-                            .to_string();
-
-                        if let Some(release_group) = get_release_group(album_mbid_string.clone()).await? {
-                            albums.push(Album {
-                                album,
-                                album_mbid: album_mbid_string,
-                                release_group,
-                                artist
-                            });
-                        }
+                        Some(album_mbid_string)
                     } else {
                         println!("The listenbrainz metadata didn't contain an album id, skipping");
+                        None
                     }
-                }
-
-                return Ok(albums);
+                }).collect::<Vec<String>>()
             },
-            _ => return Err("Error parsing albums".into())
-        }
+            _ => vec![]
+        };
+
+        return Ok(get_albums(album_mbids).await?);
+
     }
     Err("Error parsing albums".into())
 }

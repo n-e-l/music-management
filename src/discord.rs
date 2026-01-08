@@ -1,10 +1,6 @@
-use std::cmp::PartialEq;
-use std::fmt::format;
 use std::ops::{AddAssign};
-use std::panic::resume_unwind;
 use poise::CreateReply;
 use poise::serenity_prelude::{CreateActionRow, CreateButton};
-use poise::serenity_prelude::json::to_string_pretty;
 use crate::error::Error;
 use crate::music;
 use crate::music::{add_album, album_info, AlbumStatus};
@@ -38,7 +34,8 @@ pub async fn lb_recommends(
     let albums = music::request_lb_recommended().await?;
     let mut response = "".to_string();
     albums.iter().for_each(|a| {
-       response.add_assign(&*("- ".to_owned() + &a.album + "\n"));
+        let add = format!("- {} - {}\n", a.artist, a.album);
+       response.add_assign(add.as_str());
     });
     ctx.say(response).await?;
     Ok(())
@@ -183,8 +180,8 @@ pub async fn artist(
 
 #[poise::command(slash_command, prefix_command, subcommands("artist", "album"))]
 pub async fn search(
-    ctx: Context<'_>,
-    album: String,
+    _ctx: Context<'_>,
+    _album: String,
 ) -> Result<(), Error> {
     Ok(())
 }
