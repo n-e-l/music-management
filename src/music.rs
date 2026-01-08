@@ -105,8 +105,21 @@ pub async fn headphones_status() -> Result<Vec<AlbumState>, Error> {
 pub async fn add_album(album: &Album) -> Result<String, Error> {
 
     println!("Adding album ({} - {}) - {}", album.artist, album.album, album.mbid);
+    println!("Release group {}", album.release_group);
 
     let client = reqwest::Client::new();
+    let result = client
+        .get(format!("{}/api?apikey={}&cmd=addAlbum&id={}",
+                     var("HEADPHONES_URI").expect("HEADPHONES_URI should be set"),
+                     var("HEADPHONES_API_KEY").expect("HEADPHONES_API_KEY should be set"),
+                     album.mbid)
+        )
+        .send()
+        .await?
+        .text()
+        .await?;
+
+    // Also get using the release group
     let result = client
         .get(format!("{}/api?apikey={}&cmd=addAlbum&id={}",
                      var("HEADPHONES_URI").expect("HEADPHONES_URI should be set"),
