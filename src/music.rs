@@ -154,12 +154,11 @@ pub async fn album_info(album: &Album) -> Result<AlbumStatus, Error> {
 
     let album_json = value.get("album").unwrap();
     let status = album_json
-        .as_array().unwrap()
-        .get(0).unwrap()
-        .get("Status").unwrap_or(&Value::Null)
-        .to_string()
-        .trim_matches('"')
-        .to_string();
+        .as_array()
+        .and_then(|v| v.get(0))
+        .and_then(|v| v.get("Status"))
+        .and_then(|v| Some(v.to_string().trim_matches('"').to_string()))
+        .unwrap_or("".to_string());
 
     if status == "Downloaded" {
         return Ok(Downloaded);

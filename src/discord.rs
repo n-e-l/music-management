@@ -74,18 +74,19 @@ pub async fn lb_import(
                 ":red_circle:"
             }
             AlbumStatus::Wanted => {
-                ":yellow_circle:"
+                ":orange_circle:"
             }
             AlbumStatus::Snatched => {
-                ":green_circle:"
+                ":yellow_circle:"
             }
             AlbumStatus::Downloaded => {
                 ":green_circle:"
             }
         };
 
-        let url = format!("http://music.nel.re:8181/albumPage?AlbumID={}", a.release_group);
-        let extra = format!("- {} {} - [{}]({})\n", checkmark, a.artist, a.album, url);
+        // let url = format!("http://music.nel.re:8181/albumPage?AlbumID={}", a.release_group);
+        // let extra = format!("- {} {} - [{}]({})\n", checkmark, a.artist, a.album, url);
+        let extra = format!("- {} {} - {}\n", checkmark, a.artist, a.album);
         response.add_assign(&extra);
 
         reply.edit(
@@ -94,6 +95,15 @@ pub async fn lb_import(
                 .content(response.clone())
         ).await?;
     }
+
+    let extra = "done";
+    response.add_assign(&extra);
+
+    reply.edit(
+        ctx,
+        poise::CreateReply::default()
+            .content(response.clone())
+    ).await?;
 
     Ok(())
 }
