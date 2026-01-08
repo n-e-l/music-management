@@ -104,6 +104,8 @@ pub async fn headphones_status() -> Result<Vec<AlbumState>, Error> {
 
 pub async fn add_album(album: &Album) -> Result<String, Error> {
 
+    println!("Adding album ({} - {}) - {}", album.artist, album.album, album.mbid);
+
     let client = reqwest::Client::new();
     let result = client
         .get(format!("{}/api?apikey={}&cmd=addAlbum&id={}",
@@ -322,6 +324,23 @@ async fn get_release_group(mbid: String) -> Result<Option<String>, Error> {
     println!("Fetched release group info: {}", release_group);
 
     Ok(Some(release_group))
+}
+
+pub async fn lb_status() -> Result<Vec<(AlbumStatus, Album)>, Error> {
+
+    let albums = request_lb_recommended().await?;
+
+    let mut album_states = Vec::new();
+    for album in albums {
+        match album_info(&album).await {
+            Ok(status) => {
+                album_states.push((status, album));
+            }
+            Err(_) => {}
+        }
+    }
+
+    Ok(album_states)
 }
 
 pub async fn request_lb_recommended() -> Result<Vec<Album>, Error> {

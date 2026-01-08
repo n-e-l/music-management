@@ -42,14 +42,32 @@ pub async fn lb_recommends(
 }
 
 #[poise::command(slash_command, prefix_command)]
-pub async fn status(
+pub async fn lb_status(
     ctx: Context<'_>,
 ) -> Result<(), Error> {
-    let albums = music::headphones_status().await?;
+    let albums = music::lb_status().await?;
 
-    let response = albums.iter().map(|a| {
-        a.title.clone() + " " + &a.status
-    }).collect::<Vec<String>>().join("\n");
+    let mut response = "".to_string();
+
+    for (status, album) in albums {
+        let checkmark = match status {
+            AlbumStatus::Nothing => {
+                ":red_circle:"
+            }
+            AlbumStatus::Wanted => {
+                ":orange_circle:"
+            }
+            AlbumStatus::Snatched => {
+                ":yellow_circle:"
+            }
+            AlbumStatus::Downloaded => {
+                ":green_circle:"
+            }
+        };
+
+        let extra = format!("- {} {} - {}\n", checkmark, album.artist, album.album);
+        response.add_assign(&extra);
+    }
 
     ctx.say(response).await?;
 

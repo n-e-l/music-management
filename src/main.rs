@@ -17,8 +17,8 @@ async fn main() {
             commands: vec![
                 discord::lb_recommends(),
                 discord::lb_import(),
+                discord::lb_status(),
                 discord::search(),
-                discord::status(),
                 discord::help()
             ],
             ..Default::default()
