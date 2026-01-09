@@ -55,7 +55,7 @@ fn get_weekly_exploration(recommendations: Value) -> Option<String> {
                     .and_then(|u| u.get("algorithm_metadata"))
                     .and_then(|u| u.get("source_patch"))
                     .unwrap();
-                if source_patch == "weekly-exploration" {
+                if source_patch == "weekly-jams" {
                     let url = p.get("playlist")
                         .and_then(|u| u.get("identifier"))
                         .unwrap()
@@ -77,31 +77,23 @@ pub async fn add_album(album: &Album) -> Result<String, Error> {
 
     let client = reqwest::Client::new();
 
-    // I need the following three request to load, fetch, and request albums.
+    let mut info = album_info(&album.release_group).await?;
+    // Try to add unfound albums first to the index
+    if info == Nothing {
+        client
+            .get(format!("{}/api?apikey={}&cmd=addAlbum&id={}",
+                         var("HEADPHONES_URI").expect("HEADPHONES_URI should be set"),
+                         var("HEADPHONES_API_KEY").expect("HEADPHONES_API_KEY should be set"),
+                         album.mbid)
+            )
+            .send()
+            .await?
+            .text()
+            .await?;
+    }
 
-    client
-        .get(format!("{}/api?apikey={}&cmd=getAlbum&id={}",
-                     var("HEADPHONES_URI").expect("HEADPHONES_URI should be set"),
-                     var("HEADPHONES_API_KEY").expect("HEADPHONES_API_KEY should be set"),
-                     album.release_group)
-        )
-        .send()
-        .await?
-        .text()
-        .await?;
-
-    let result = client
-        .get(format!("{}/api?apikey={}&cmd=addAlbum&id={}",
-                     var("HEADPHONES_URI").expect("HEADPHONES_URI should be set"),
-                     var("HEADPHONES_API_KEY").expect("HEADPHONES_API_KEY should be set"),
-                     album.mbid)
-        )
-        .send()
-        .await?
-        .text()
-        .await?;
-
-    let info = album_info(&album.release_group).await?;
+    // Try to download albums if they are valid and not downloaded already
+    info = album_info(&album.release_group).await?;
     match info {
         Nothing => {
             println!("Skipping queue for not found album: {} - {} ({})", album.artist, album.album, album.mbid);
@@ -118,6 +110,8 @@ pub async fn add_album(album: &Album) -> Result<String, Error> {
                 .await?
                 .text()
                 .await?;
+
+            return Ok("Queued album".to_string())
         }
         Snatched => {}
         Downloaded => {
@@ -125,10 +119,11 @@ pub async fn add_album(album: &Album) -> Result<String, Error> {
         }
     }
 
-    Ok(result)
+    Ok("Didn't queue album".to_string())
 }
 
 #[derive(Debug)]
+#[derive(PartialEq)]
 pub enum AlbumStatus {
     Nothing,
     Wanted,
