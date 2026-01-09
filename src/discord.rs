@@ -45,6 +45,8 @@ pub async fn lb_recommends(
 pub async fn lb_status(
     ctx: Context<'_>,
 ) -> Result<(), Error> {
+    let mut reply = ctx.say("Fetching albums...").await?;
+
     let albums = music::lb_status().await?;
 
     let mut response = "".to_string();
@@ -69,7 +71,11 @@ pub async fn lb_status(
         response.add_assign(&extra);
     }
 
-    ctx.say(response).await?;
+    reply.edit(
+        ctx,
+        poise::CreateReply::default()
+            .content(response.clone())
+    ).await?;
 
     Ok(())
 }
@@ -78,8 +84,10 @@ pub async fn lb_status(
 pub async fn lb_import(
     ctx: Context<'_>,
 ) -> Result<(), Error> {
-    let mut response = "Adding albums\n".to_string();
+    let mut response = "Adding albums...\n".to_string();
     let reply = ctx.say(response.clone()).await?;
+
+   response = "".to_string();
 
     let albums = music::request_lb_recommended().await?;
 

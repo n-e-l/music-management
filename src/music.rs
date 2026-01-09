@@ -109,6 +109,20 @@ pub async fn add_album(album: &Album) -> Result<String, Error> {
     println!("Release group {}", album.release_group);
 
     let client = reqwest::Client::new();
+
+    // I need the following three request to load, fetch, and request albums.
+
+    let result = client
+        .get(format!("{}/api?apikey={}&cmd=getAlbum&id={}",
+                     var("HEADPHONES_URI").expect("HEADPHONES_URI should be set"),
+                     var("HEADPHONES_API_KEY").expect("HEADPHONES_API_KEY should be set"),
+                     album.mbid)
+        )
+        .send()
+        .await?
+        .text()
+        .await?;
+
     let result = client
         .get(format!("{}/api?apikey={}&cmd=addAlbum&id={}",
                      var("HEADPHONES_URI").expect("HEADPHONES_URI should be set"),
@@ -120,9 +134,9 @@ pub async fn add_album(album: &Album) -> Result<String, Error> {
         .text()
         .await?;
 
-    // Also get using the release group
+    // Only do an add for now
     let result = client
-        .get(format!("{}/api?apikey={}&cmd=addAlbum&id={}",
+        .get(format!("{}/api?apikey={}&cmd=queueAlbum&id={}",
                      var("HEADPHONES_URI").expect("HEADPHONES_URI should be set"),
                      var("HEADPHONES_API_KEY").expect("HEADPHONES_API_KEY should be set"),
                      album.release_group)
@@ -131,18 +145,6 @@ pub async fn add_album(album: &Album) -> Result<String, Error> {
         .await?
         .text()
         .await?;
-
-    // Only do an add for now
-    // let result = client
-    //     .get(format!("{}/api?apikey={}&cmd=queueAlbum&id={}",
-    //                  var("HEADPHONES_URI").expect("HEADPHONES_URI should be set"),
-    //                  var("HEADPHONES_API_KEY").expect("HEADPHONES_API_KEY should be set"),
-    //                  album.release_group)
-    //     )
-    //     .send()
-    //     .await?
-    //     .text()
-    //     .await?;
     Ok(result)
 }
 
