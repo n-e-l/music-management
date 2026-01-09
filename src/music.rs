@@ -55,7 +55,7 @@ fn get_weekly_exploration(recommendations: Value) -> Option<String> {
                     .and_then(|u| u.get("algorithm_metadata"))
                     .and_then(|u| u.get("source_patch"))
                     .unwrap();
-                if source_patch == "weekly-jams" {
+                if source_patch == "weekly-exploration" {
                     let url = p.get("playlist")
                         .and_then(|u| u.get("identifier"))
                         .unwrap()
