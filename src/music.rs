@@ -1,10 +1,9 @@
 use std::cmp::Ordering;
 use std::env::var;
-use std::str::FromStr;
 use reqwest::header::{AUTHORIZATION, USER_AGENT};
 use serde_json::{Value};
 use crate::error::Error;
-use crate::music::AlbumStatus::{Downloaded, Nothing, Snatched, Wanted};
+use crate::music::AlbumStatus::{Downloaded, Nothing, Skipped, Snatched, Wanted};
 
 #[derive(Debug)]
 pub struct Album
@@ -71,38 +70,6 @@ fn get_weekly_exploration(recommendations: Value) -> Option<String> {
     None
 }
 
-pub struct AlbumState {
-    pub status: String,
-    pub title: String
-}
-
-pub async fn headphones_status() -> Result<Vec<AlbumState>, Error> {
-    let client = reqwest::Client::new();
-    let result = client
-        .get(format!("{}/api?apikey={}&cmd=getHistory",
-                     var("HEADPHONES_URI").expect("HEADPHONES_URI should be set"),
-                     var("HEADPHONES_API_KEY").expect("HEADPHONES_API_KEY should be set")
-        )
-        )
-        .send()
-        .await?
-        .text()
-        .await?;
-
-    let json = Value::from_str(&result)?;
-    let album_states = json.as_array().unwrap().iter().map(|entry| {
-        let title = entry.get("Title").unwrap().clone().to_string();
-        let status = entry.get("Status").unwrap().clone().to_string();
-
-        AlbumState {
-            title,
-            status
-        }
-    }).collect();
-
-    Ok(album_states)
-}
-
 pub async fn add_album(album: &Album) -> Result<String, Error> {
 
     println!("Adding album ({} - {}) - {}", album.artist, album.album, album.mbid);
@@ -112,11 +79,11 @@ pub async fn add_album(album: &Album) -> Result<String, Error> {
 
     // I need the following three request to load, fetch, and request albums.
 
-    let result = client
+    client
         .get(format!("{}/api?apikey={}&cmd=getAlbum&id={}",
                      var("HEADPHONES_URI").expect("HEADPHONES_URI should be set"),
                      var("HEADPHONES_API_KEY").expect("HEADPHONES_API_KEY should be set"),
-                     album.mbid)
+                     album.release_group)
         )
         .send()
         .await?
@@ -134,17 +101,30 @@ pub async fn add_album(album: &Album) -> Result<String, Error> {
         .text()
         .await?;
 
-    // Only do an add for now
-    let result = client
-        .get(format!("{}/api?apikey={}&cmd=queueAlbum&id={}",
-                     var("HEADPHONES_URI").expect("HEADPHONES_URI should be set"),
-                     var("HEADPHONES_API_KEY").expect("HEADPHONES_API_KEY should be set"),
-                     album.release_group)
-        )
-        .send()
-        .await?
-        .text()
-        .await?;
+    let info = album_info(&album.release_group).await?;
+    match info {
+        Nothing => {
+            println!("Skipping queue for not found album: {} - {} ({})", album.artist, album.album, album.mbid);
+        }
+        Wanted | Skipped => {
+            println!("Queueing album {} - {} ({})", album.artist, album.album, album.mbid);
+            client
+                .get(format!("{}/api?apikey={}&cmd=queueAlbum&id={}",
+                             var("HEADPHONES_URI").expect("HEADPHONES_URI should be set"),
+                             var("HEADPHONES_API_KEY").expect("HEADPHONES_API_KEY should be set"),
+                             album.release_group)
+                )
+                .send()
+                .await?
+                .text()
+                .await?;
+        }
+        Snatched => {}
+        Downloaded => {
+            println!("Skipping queue for already downloading album {} - {} ({})", album.artist, album.album, album.mbid);
+        }
+    }
+
     Ok(result)
 }
 
@@ -152,17 +132,18 @@ pub async fn add_album(album: &Album) -> Result<String, Error> {
 pub enum AlbumStatus {
     Nothing,
     Wanted,
+    Skipped,
     Snatched,
     Downloaded
 }
 
-pub async fn album_info(album: &Album) -> Result<AlbumStatus, Error> {
+pub async fn album_info(release_group: &str) -> Result<AlbumStatus, Error> {
     let client = reqwest::Client::new();
     let result = client
         .get(format!("{}/api?apikey={}&cmd=getAlbum&id={}",
                      var("HEADPHONES_URI").expect("HEADPHONES_URI should be set"),
                      var("HEADPHONES_API_KEY").expect("HEADPHONES_API_KEY should be set"),
-                     album.release_group)
+                     release_group)
         )
         .send()
         .await?
@@ -179,8 +160,21 @@ pub async fn album_info(album: &Album) -> Result<AlbumStatus, Error> {
         .and_then(|v| Some(v.to_string().trim_matches('"').to_string()))
         .unwrap_or("".to_string());
 
+    let title = album_json
+        .as_array()
+        .and_then(|v| v.get(0))
+        .and_then(|v| v.get("AlbumTitle"))
+        .and_then(|v| v.as_str());
+
+    if title.is_none() {
+        return Ok(Nothing);
+    }
+
     if status == "Downloaded" {
         return Ok(Downloaded);
+    }
+    if status == "Skipped" {
+        return Ok(Skipped);
     }
     if status == "Wanted" {
         return Ok(Wanted);
@@ -364,7 +358,7 @@ pub async fn lb_status() -> Result<Vec<(AlbumStatus, Album)>, Error> {
 
     let mut album_states = Vec::new();
     for album in albums {
-        match album_info(&album).await {
+        match album_info(&album.release_group).await {
             Ok(status) => {
                 album_states.push((status, album));
             }

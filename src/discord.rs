@@ -45,7 +45,7 @@ pub async fn lb_recommends(
 pub async fn lb_status(
     ctx: Context<'_>,
 ) -> Result<(), Error> {
-    let mut reply = ctx.say("Fetching albums...").await?;
+    let reply = ctx.say("Fetching albums...").await?;
 
     let albums = music::lb_status().await?;
 
@@ -53,7 +53,7 @@ pub async fn lb_status(
 
     for (status, album) in albums {
         let checkmark = match status {
-            AlbumStatus::Nothing => {
+            AlbumStatus::Nothing | AlbumStatus::Skipped => {
                 ":red_circle:"
             }
             AlbumStatus::Wanted => {
@@ -94,9 +94,9 @@ pub async fn lb_import(
     for a in &albums {
         add_album(a).await?;
 
-        let info = album_info(a).await?;
+        let info = album_info(&a.release_group).await?;
         let checkmark = match info {
-            AlbumStatus::Nothing => {
+            AlbumStatus::Nothing | AlbumStatus::Skipped => {
                 ":red_circle:"
             }
             AlbumStatus::Wanted => {
